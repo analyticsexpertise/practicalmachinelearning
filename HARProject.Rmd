@@ -1,0 +1,557 @@
+---
+title: "Whose Got Classe?" 
+author: Mark A. Stephens 
+date: "July 26, 2015"
+output: html_document
+---
+Final Project | Practical Machine Learning | Johns Hopkins Data Science Certification 
+```{r LOAD_SCRIPT, echo=FALSE, include=FALSE}
+source('~/Personal Development/DSC/PMLProject/HAR_Project.R')
+```
+```{r LOAD_MODEL, echo=FALSE, include=FALSE,cache=TRUE}
+# loaddata
+loaddata()
+# check_missing
+check_missing()
+# ChoosePredictors (get_cor can be run to see if there are highly correlated variables)
+ChoosePredictors()
+# split_data
+split_data()
+# remove_trash
+# remove_trash()
+# (using read_model to reuse saved model)
+# trainModel
+# trainModel()
+# save_model 
+# saveModel()
+# read model
+read_model()
+# predictVal
+predictVal()
+#valResults
+valResults()
+# createConfusion
+createConfusion()
+```
+
+# Summary
+The goal of this project is to predict the manner in which participants in Human Activity Recognition study completed the exercise.
+
+Completion of the exercise is defined in 5 classes:
+
+- A exactly according to specification
+- B throwing elbows to the front
+- C lifting the dumbbell only halfway
+- D lowering the dumbbell only halfway
+- E throwing the hips to the front
+
+A summary of the study and associated literature is accessible here: http://groupware.les.inf.puc-rio.br/har
+
+Result of test data submission is 20/20 correct.
+
+Results of the final model show high accuracy of `r model_Accuracy()`. Results based upon testing on validation data summarized below.
+
+```{r SUMMARY_PLOT, echo=FALSE, include=TRUE, cache=TRUE,fig.height=4,fig.width=4}
+createGGConfusion()
+```
+
+The Analysis section explains how the model was built (including a discussion of choices made throughout the process as well as how cross-validation is used when training the model) and a review of validation and testing. The Appendix includes the R script created to build, validate, and test the model.
+
+# Analysis
+
+### How the model was built
+
+Steps in building the model are as follows: 
+
+1. Load and clean the data
+2. Explore the data
+3. Choose predictors
+4. Split the data into training and validation sets
+5. Train the model
+6. Validate the model
+
+The training dataset were loaded into the working directory from https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv  
+
+The data were inspected using Microsoft Excel. Based upon inspection, data with values of #DIV/0, NA, and blanks were set to NA. 
+Variables with greater than 50% of NA values were removed. 
+
+The distribution of the outcome variable, Classe, was explored to understand the balance of the outcome by factor.
+
+```{r EXPLORE_PLOT, echo=FALSE, include=TRUE, cache=TRUE,fig.height=6,fig.width=6}
+plot_histogram()
+```
+
+Of particular interest in exploration is the impact and relevance of variable new_window. Classe distributions by factor skew towards classe equal to A for all participants.
+
+Predictors for model training were chosen by:
+
+1. removing non zero variance variables
+2. removing variables with linear dependencies
+3. checking for highly correlated variables 
+
+The plot below shows the 46 chosen predictors (sorted by importance as determined during training):
+
+```{r PREDICTOR_PLOT, echo=FALSE, include=TRUE, cache=TRUE,fig.height=6,fig.width=6}
+showImportance()
+```
+
+Seventy percent of complete cases in the original training data were used to train the model. 
+
+The remaining thirty percent were used for validation.
+
+The model was trained using random forest, rf method in the caret package. The environment used for training is as follows:
+
+- Processor: Intel Core i7
+- RAM: 16 GB
+- R Version: R-3.2.1 64-bit
+- Parallel processing allowed
+
+The model was built using 5-fold cross validation based upon an outcome factor level of 5. 
+Accuracy was chosen to select the optimal model.
+
+The following is the outcome of the training process:
+
+```{r SHOW_TRAINING, echo=FALSE, include=TRUE, cache=TRUE}
+show_train_model()
+```
+
+The final model used for validation and testing is as follows:
+
+```{r SHOW_FINAL, echo=FALSE, include=TRUE, cache=TRUE}
+show_final_model()
+```
+
+### Model validation 
+
+The result of model validation is accuracy of `r val_Accuracy()`. 
+
+Therefore, the expected out of sample error rate is `r oos_Error()`.
+
+Visual results of model validation are shown in the Summary section confusion matrix (see chart in Summary section). A detailed summary of validation is shown in the Appendix.
+
+
+# Appendix
+
+
+#### Validation Results
+
+```{r CONFUSE_MATRIX, echo=FALSE, include=TRUE, cache=TRUE}
+kable(cfMatrix$byClass)
+```
+
+#### Validation Confusion Matrix
+
+```{r CONFUSE_TABLE, echo=FALSE, include=TRUE, cache=TRUE}
+kable(cfMatrix$table)
+```
+
+#### Validation Overall Statistics
+```{r CONFUSE_OVERALL, echo=FALSE, include=TRUE, cache=TRUE}
+kable(cfMatrix$overall)
+```
+
+## R Script
+
+#### Instructions for running script
+```{r SCRIPT_COMMENTS, echo=TRUE, eval=FALSE, include=TRUE}
+### Practical Machine Learning Project
+### Human Activity Recognition
+### Whose got Classe?
+### Mark Stephens
+### July 2015
+
+# Human Activity Recognition study reference: http://groupware.les.inf.puc-rio.br/har
+# Prediction outcome variable = classe (the manner in which they did the exercise)
+
+# To reproduce the outcome :
+# Source training data from: https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv
+# Source test data from: https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv
+# Store training and test data in working directory
+# Run the functions in the following order:
+# loaddata
+# check_missing
+# ChoosePredictors (get_cor can be run to see if there are highly correlated variables)
+# split_data
+# remove_trash
+# trainModel
+# save_model (use read_model to reuse saved model)
+# predictVal
+# valResults
+# createConfusion (use createGGConfusion to create plot of confusion matrix)
+# loadtest
+# predictTest
+# convertTF
+# submitanswers
+
+# Review comments and code below for information about analysis and functions
+```
+
+#### R Script
+```{r SCRIPT_CODE, echo=TRUE, eval=FALSE, include=TRUE}
+### Practical Machine Learning Project
+### Human Activity Recognition
+### Whose got Classe?
+### Mark Stephens
+### July 2015
+
+## require packages
+require(caret)
+require(dplyr)
+require(knitr)
+require(som)
+
+
+## Load training data
+loaddata <- function(){
+  
+  ## Source training data from: 
+  ## Store training data in working directory
+  
+  ## read data from source file located in working directory
+  training_full <<- read.csv(file = "pml-training.csv",na.strings = c('#DIV/0!','NA',''),stringsAsFactors = FALSE )
+}
+
+## Remove variables with > 50% missing data
+check_missing <-function(){
+  
+  training_row <- nrow(training_full)
+  
+  col_is_bad <<- apply(training_full,2,function(col){
+    
+    sum(is.na(col)) / training_row > 0.5
+    
+  })
+  
+## Remove variables with > 50% values classified as missing data (is.na is true)
+  
+  training_full[col_is_bad] <<- list(NULL)
+  
+}
+
+
+## Preprocess
+
+get_pre <- function(){
+  
+  pretrain <<- preProcess(training_full[,c(-1,-2,-3,-4,-5,-6,-160)],method=c("center","scale"))
+  
+}
+
+## Discover Data
+plot_histogram <- function(){
+  
+  ## review distribution of outcomes (classe)
+  
+  g <- ggplot(data=training_full,aes(x=classe))
+  
+  g <- g + geom_histogram(fill = "lightblue") 
+  
+  g <- g + facet_grid(user_name~new_window)
+  
+  g
+  
+}
+
+### review summary of outcome distribution
+get_summary <- function(){
+  
+  kable(summarize(group_by(training_full,user_name,new_window,classe),length(classe)))
+  
+}
+
+## Preprocess Data
+## http://topepo.github.io/caret/preprocess.html
+
+## Choose Predictors
+## Predictors for model training are chosen by:
+## 1. removing non zero variance variables
+## 2. removing variables with linear dependencies
+## 3. A check for highly correlated variables is provided in function get_cor
+
+## Use the function ChoosePredictors to create a vector of predictors to subset the training data
+## ChoosePredictors function calls the find_linears and find_nzvs function
+
+## Find & Remove Linear dependencies
+find_linears <- function(){
+  
+  comboInfo <<- findLinearCombos(training_full[ ,trainpredictors])
+  
+  remove_linears <<- comboInfo$remove
+  
+  if(length(remove_linears) >= 1){trainpredictors <<- trainpredictors[-remove_linears]}
+  
+}
+
+
+## Find Near Zero Variance Variables
+
+## Use to identify predictors with potential to become zero-variance predictors when data are split into
+## cross-validation/bootstrap sub-samples or that a few samples may have undue influence on the model.
+## Identify NZVs and eliminate prior to modeling.
+
+find_nzvs <- function(){
+  
+  nzvs <<- nearZeroVar(training_full,saveMetrics = TRUE)
+  
+  predictor_choice <<- nzvs[(nzvs$nzv==FALSE) & (nzvs$freqRatio < 10),  ]
+  
+  kable(predictor_choice)
+}
+
+## To choose predictors:
+## Remove near zero variance variables (find_nzvs)
+## El
+ChoosePredictors <- function(){
+  
+  ## Eliminate non zero variables
+  
+  find_nzvs()
+  
+  trainpredictors <<- rownames(predictor_choice)
+  
+  ## Remove non numeric data
+  
+ remove_predictor <- c("X","user_name","raw_timestamp_part_1","raw_timestamp_part_2","raw_timestamp_part_3","cvtd_timestamp","num_window",
+                       "classe") 
+  
+ trainpredictors <<- trainpredictors[!trainpredictors %in% remove_predictor]
+  
+  
+
+  find_linears()
+
+}
+
+## Review correlations to determine if there are highly correlated predictors 
+## Highly correlated predictors defined for variables with correlation >= 90
+
+get_cor <- function(){
+  
+  ## create corrleation matrix of chosen predictor variables
+  
+  cor_vec <<- cor(training_full[ ,trainpredictors])
+  
+  ## Review correlated predictors
+  
+  cor_eliminate <<- findCorrelation(cor_vec, cutoff = 0.90, names = FALSE, exact = FALSE)
+  
+}
+
+## Split data into training and validation
+## Use 70% for training and 30% for validation
+
+split_data <- function(){
+
+  ## use only complete cases
+  training <<- training_full[complete.cases(training_full) , trainpredictors ]    
+  
+  ## add classe column to training data
+  training <<- cbind(training,classe=training_full[ ,"classe"])
+  
+  
+  ## use 70% of training data for training and 30% for validation
+  
+  set.seed(123456)
+  
+  inTrain <- createDataPartition(y=training$classe,p=0.7,list=FALSE)
+  
+  trainset <<- training[inTrain, ] ## create training set
+  
+  valset <<- training[-inTrain, ] ## create validation set
+  
+}
+
+## Remove unneeded objects from memory to maximize memory available to train model
+
+removetrash <- function(){
+  
+ ## rm(predictor_choice,envir=sys.frame(-1))
+  rm(training,envir=sys.frame(-1))
+  rm(training_full,envir=sys.frame(-1))
+  rm(nzvs,envir=sys.frame(-1))
+  
+  gc()
+  
+}
+
+## Train Model
+## Train using Random Forest for accuracy using 5-fold cross validation
+
+## System parameters are
+## Processor: Intel Core i7
+## RAM: 16 GB
+## R Version: R-3.2.1 64-bit
+## Parallel processing allowed
+
+trainModel <- function(){
+
+## Train using Random Forest for accuracy using 5-fold cross validation
+## 5 classes of outcome so K = 5 for K-fold cross-validation
+
+rf_model <<- train(as.factor(classe) ~., data = trainset ,method="rf",
+                   metric="Accuracy",
+                   trControl=trainControl(method="cv",number=5),
+                   prox=TRUE,allowParllel=TRUE)
+
+}
+
+## Save training model for reuse
+## Training model saved in working directory
+save_model <- function(){
+  
+  saveRDS(rf_model,file="rf_model1.rds")
+}
+
+## Read training model
+read_model <- function(){
+  
+  rf_model <<- readRDS("rf_model1.rds")
+  
+}
+
+## Validate Model
+## Use 30% of data from training source file for validation
+predictVal <- function(){
+  
+  testfit <<- predict(rf_model,newdata=valset)
+  
+}
+
+### Get results
+valResults <- function(){
+  
+  valResult <<- table(testfit,valset$classe)
+}
+
+## Create Confusion Matrix
+createConfusion <- function(){
+  
+  cfMatrix <<- confusionMatrix(valResult)
+}
+
+## Create ggplot Confusion Matrix
+createGGConfusion <- function(){
+  
+  cdata <<- as.data.frame(cfMatrix$table)
+  
+  g <- ggplot(cdata)
+  
+  g <- g + geom_tile(aes(x=testfit,y=Var2,fill=Freq))
+  
+  g <- g + geom_text(aes(x=testfit,y=Var2,fill=Freq),label = cdata$Freq)
+  
+  g <- g + labs(fill = "Correct" , x = "Predicted Class", y = "Actual Class") 
+  
+  g <- g + scale_fill_gradient(low = "white", high = "lightblue")
+  
+  g <- g + ggtitle("Validation Results")
+ 
+  g
+  
+}
+
+## Test Model
+
+## Load Test Data
+## Source test data from:
+## Load test data into working directory
+## Define missing data per training data definition
+
+loadtest <- function(){
+  
+  test_data <<- read.csv(file = "pml-testing.csv",na.strings = c('#DIV/0!','NA',''),stringsAsFactors = FALSE )
+  
+}
+
+## Predict on testing data
+
+predictTest <- function(){
+  
+  testfit <<- predict(rf_model,newdata=test_data)
+}
+
+## Convert test fit to character vector for submission
+convertTF <- function(){
+  
+  testsubmit <<- as.character(testfit)
+  
+}
+
+## Create Submission
+
+pml_write_files = function(x){
+  
+  n = length(x)
+  
+  for(i in 1:n){
+    
+    filename = paste0("problem_id_",i,".txt")
+    
+    write.table(x[i],file=filename,quote=FALSE,row.names=FALSE,col.names=FALSE)
+
+  }
+}
+
+submitanswers <- function(){
+  
+  pml_write_files(testsubmit)
+  
+}
+
+## Show Importance of variables in final model
+showImportance <- function(){
+  
+  sI <<- as.data.frame(rf_model$finalModel$importance)
+  
+  sI <<- cbind(rownames(sI),sI)
+  
+  colnames(sI) <<- c("Variable","MeanDecreaseGini")
+  
+  rownames(sI) <<- NULL
+  
+  g <- ggplot(sI, aes(x=factor(Variable),y=MeanDecreaseGini))
+  
+  g <- g + geom_bar(stat = "identity")
+  
+  g <- g + theme(axis.text.x = element_text(angle = 90))
+  
+  g <- g + xlab("Predictor (order of importance)")
+  
+  g <- g + ylab(" Mean Decrease Gini")
+  
+  g <- g + ggtitle("Chosen Predictors & Importance")
+  g
+}
+
+## Show Chosen Model Accuracy
+model_Accuracy <- function(){
+  paste0(round(rf_model$results$Accuracy[2]*100,1),"%")
+}
+
+### Show training model 
+show_train_model <- function(){
+  
+  rf_model
+}
+
+### Show final model
+show_final_model <- function(){
+  
+  rf_model$finalModel
+  
+}
+
+### Show validation accuracy
+val_Accuracy <- function(){
+  
+paste0(round(cfMatrix$overall[1]*100,1),"%")
+  
+}
+
+### Show out of sample error
+oos_Error <- function(){
+  
+    paste0(round((1-cfMatrix$overall[1])*100,1),"%")
+}
+
+```
